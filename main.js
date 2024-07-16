@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial fetch of stories sorted by date
     fetchTopStories(currentSort, currentTimePeriod, currentFilter);
 
+
     // Event listeners for navigation filters
     navDivs.forEach(div => {
         div.addEventListener('click', function() {
@@ -99,14 +100,15 @@ document.addEventListener('DOMContentLoaded', function() {
             let time1 = performance.now();
             const response = await fetch(`https://hacker-news.firebaseio.com/v0/item/${storyId}.json?print=pretty`);
             let time2 = performance.now();
-            let time = time2 - time1;
             return await response.json();
         } catch (error) {
             console.error(`Error fetching story ${storyId}:`, error);
         }
     }
 
+
     // Function to fetch top stories based on sort, time period, and filter
+
     async function fetchTopStories(sortBy, timePeriod, filterType) {
         const startTime = performance.now()
         let apiUrl = 'https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty';
@@ -153,17 +155,27 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to load and render stories based on IDs, sort, and time period
     async function loadStories(storyIds, sortBy, timePeriod) {
         isLoading = true;
-        const storyPromises = storyIds.map(storyId => getStoryDetails(storyId));
-        const stories = await Promise.all(storyPromises);
+        const listAll = document.querySelector('.list-all');
+        if (currentPage === 0) {
+            listAll.innerHTML = '';
+        }
 
-        // Filter and sort stories based on search text
-        const filteredStories = filterAndSortStories(stories, sortBy, timePeriod);
-        renderStories(filteredStories);
+        for (let storyId of storyIds) {
+            const storyData = await getStoryDetails(storyId);
+
+            // Filter and sort the single story before rendering
+            const filteredStory = filterAndSortStories([storyData], sortBy, timePeriod);
+            if (filteredStory.length > 0) {
+                renderStory(filteredStory[0], sortBy);
+            }
+        }
+
         isLoading = false;
 
         // Reattach star click listeners after rendering
         onClickStars();
     }
+
 
     // Function to filter and sort stories based on search text, sort criteria, and time period
     function filterAndSortStories(stories, sortBy, timePeriod) {
@@ -282,54 +294,87 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Function to render stories
-    function renderStories(stories) {
+
+    function renderStory(storyData, sortBy) {
         const listAll = document.querySelector('.list-all');
-        if (currentPage === 0) {
-            listAll.innerHTML = '';
+        const timeAgo = formatTime(storyData.time);
+
+        const isFavorite = favoriteStories.includes(storyData.id);
+        const starClass = isFavorite ? 'fa-star checked' : 'fa-star';
+
+        const storyHtml = `
+        <div class="story d-flex flex-column mb-1 p-3 bg-white" data-story-id="${storyData.id}" data-story-time="${storyData.time}" data-score="${storyData.score+storyData.descendants}">
+            <div class="d-flex align-items-center">
+                <img class="story-img me-3" src="photos/all.png" alt="Story Image">
+                <div>
+                    <p style="margin: 0;">${storyData.title}</p>
+                    <div class="post-details" style="color: gray; font-size: 0.9em;">
+                        <span class="heart" data-id="${storyData.id}">
+                            <img src="photos/heart.png" style="width: 15px; vertical-align: middle; margin-right: 5px;">
+                            <span class="points">${storyData.score}</span> points
+                        </span> |
+                        <span><img src="photos/user.png" style="width: 15px; vertical-align: middle; margin-right: 5px;">${storyData.by}</span> |
+                        <span><img src="photos/clock.png" style="width: 15px; vertical-align: middle; margin-right: 5px;">${timeAgo}</span> |
+                        <a class="story-url" target="_blank" href="${storyData.url}"><span>${storyData.url ? new URL(storyData.url).hostname : ''}</span></a>
+                    </div>
+                </div>
+                <div class="ms-auto d-flex align-items-center">
+                    <div class="comment-btn" data-id="${storyData.id}">
+                        <img class="chat me-2" src="photos/chat.png" alt="Chat Icon">
+                        <p class="comments mb-0">${storyData.descendants || 0} comments</p>
+                    </div>
+                    <img class="share ms-2" src="photos/share.png" alt="Share">
+                    <span class="fa ${starClass}"></span>
+                </div>
+            </div>
+            <div class="comment-section comments-container" style="display: none"></div>
+        </div>
+    `;
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = storyHtml.trim();
+        const newStoryElement = tempDiv.firstChild;
+
+        if (sortBy === 'popularity') {
+            // Add the new story to the appropriate position based on score
+            let inserted = false;
+            const existingStories = Array.from(listAll.children);
+            for (let i = 0; i < existingStories.length; i++) {
+                const existingStoryScore = parseInt(existingStories[i].dataset.score, 10);
+                if (storyData.score + storyData.descendants > existingStoryScore) {
+                    listAll.insertBefore(newStoryElement, existingStories[i]);
+                    inserted = true;
+                    break;
+                }
+            }
+            if (!inserted) {
+                listAll.appendChild(newStoryElement);
+            }
+        } else {
+            listAll.appendChild(newStoryElement);
         }
 
-        stories.forEach(storyData => {
-            const timeAgo = formatTime(storyData.time);
 
-            const isFavorite = favoriteStories.includes(storyData.id);
-            const starClass = isFavorite ? 'fa-star checked' : 'fa-star';
+        if (sortBy === 'date'){
+            // Add the new story to the appropriate position based on time
+            let inserted = false;
+            const existingStories = Array.from(listAll.children);
+            for (let i = 0; i < existingStories.length; i++) {
+                const existingStoryTime = parseInt(existingStories[i].dataset.storyTime, 10);
+                if (storyData.time > existingStoryTime) {
+                    listAll.insertBefore(newStoryElement, existingStories[i]);
+                    inserted = true;
+                    break;
+                }
+            }
+            if (!inserted) {
+                listAll.appendChild(newStoryElement);
+            }
+        }
 
-            const storyHtml =
-                `
-                <div class="story d-flex flex-column mb-1 p-3 bg-white" data-story-id="${storyData.id}">
-                    <div class="d-flex align-items-center">
-                        <img class="story-img me-3" src="photos/all.png" alt="Story Image">
-                        <div>
-                            <p style="margin: 0;">${storyData.title}</p>
-                            <div class="post-details" style="color: gray; font-size: 0.9em;">
-                                <span class="heart" data-id="${storyData.id}">
-                                    <img src="photos/heart.png" style="width: 15px; vertical-align: middle; margin-right: 5px;">
-                                    <span class="points">${storyData.score}</span> points
-                                </span> |
-                                <span><img src="photos/user.png" style="width: 15px; vertical-align: middle; margin-right: 5px;">${storyData.by}</span> |
-                                <span><img src="photos/clock.png" style="width: 15px; vertical-align: middle; margin-right: 5px;">${timeAgo}</span> |
-                                <a class="story-url" target="_blank" href="${storyData.url}"><span>${storyData.url ? new URL(storyData.url).hostname : ''}</span></a>
-                            </div>
-                        </div>
-                        <div class=" ms-auto d-flex align-items-center "  >
-                            <div class="comment-btn" data-id="${storyData.id}">
-                                <img class="chat me-2" src="photos/chat.png" 
-                                <p class="comment mb-0 ">${storyData.descendants || 0} comments</p>
-                            </div>
-                            <img class="share ms-2" src="photos/share.png" alt="Share">
-                            <span class="fa ${starClass}"></span>
-                        </div>
-                    </div>
-                    <div class="comment-section comments-container" style="display: none"></div>
-                </div>
-            `;
-            listAll.innerHTML += storyHtml;
-        });
-        addHeartEventListeners()
-        // Reattach star click listeners after rendering
         onClickStars();
-        addCommentEventListeners()
+        addHeartEventListeners();
+        addCommentEventListeners();
     }
 
     function addCommentEventListeners() {
@@ -339,16 +384,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 const storyElement = this.closest('.story');
                 const commentsContainer = storyElement.querySelector('.comments-container');
 
-                if (commentsContainer.style.display === 'none') {
+                if (!storyElement.dataset.commentsFetched) {
                     // Load and show comments
                     getStoryDetails(storyId).then(story => {
-                        loadComments(story.kids, commentsContainer);
+                        if (story.kids) {
+                            loadComments(story.kids, commentsContainer);
+                        }
                         commentsContainer.style.display = 'block';
+                        storyElement.dataset.commentsFetched = true; // Mark as comments fetched
                     });
                 } else {
-                    // Hide comments
-                    commentsContainer.style.display = 'none';
-                    commentsContainer.innerHTML = ''; // Clear the comments container
+                    // Toggle display of comments
+                    if (commentsContainer.style.display === 'none') {
+                        commentsContainer.style.display = 'block';
+                    } else {
+                        commentsContainer.style.display = 'none';
+                    }
                 }
             }
         });
@@ -441,7 +492,3 @@ document.addEventListener('DOMContentLoaded', function() {
 
     //onClickStars();
 });
-
-
-
-

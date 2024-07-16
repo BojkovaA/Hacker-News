@@ -180,7 +180,7 @@
 }
 
 .share, .star {
-    width: 20px;
+    width: 1.2rem;
 }
 
 .checked {
@@ -212,6 +212,12 @@
     filter: invert(22%) sepia(96%) saturate(7452%) hue-rotate(1deg) brightness(104%) contrast(119%);
 }
 
+.comments{
+
+    display: inline;
+
+}
+
 .comment {
     border: 1px solid #ccc;
     border-radius: 5px;
@@ -219,6 +225,8 @@
     margin-bottom: 10px;
     display: block;
 }
+
+
 
 .comment-header {
     display: flex;
@@ -258,6 +266,12 @@
 }
 
 .comment-btn{
-    margin-top: 15px;
+    margin-top: 5px;
     cursor: pointer;
+    border: none;
+
+}
+
+.chat{
+    margin-left: -20px;
 }
