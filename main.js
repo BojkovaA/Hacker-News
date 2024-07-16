@@ -7,13 +7,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let storyIds = [];
     let currentPage = 0;
-    const storiesPerPage = 20;
+    let storiesPerPage = 20;
     let currentSort = 'date';
     let currentTimePeriod = 'forever';
     let currentFilter = '';
     let currentSearchText = '';
+    let searched=false;
     let isLoading = false;
     let favoriteStories = JSON.parse(localStorage.getItem('favoriteStories')) || [];
+
 
     // Initial fetch of stories sorted by date
     fetchTopStories(currentSort, currentTimePeriod, currentFilter);
@@ -23,25 +25,11 @@ document.addEventListener('DOMContentLoaded', function() {
     navDivs.forEach(div => {
         div.addEventListener('click', function() {
             const filterType = this.id;
-
-            navDivs.forEach(div => div.classList.remove('active'));
-            this.classList.add('active');
-
+            setActiveFilter(navDivs, this);
             currentFilter = filterType;
             currentPage = 0; // Reset to the first page
             fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-
-            if (filterType === 'all' || filterType === 'starred') {
-                categorySelect.disabled = false;
-                categorySelect.classList.remove('disabled-option');
-                categorySelect.value = 'all';
-            } else {
-                categorySelect.disabled = true;
-                categorySelect.classList.add('disabled-option');
-                categorySelect.value = 'all';
-                currentFilterType = 'all';
-                fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-            }
+            updateCategorySelect(filterType);
         });
     });
 
@@ -49,9 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
     navItems.forEach(navLink => {
         navLink.addEventListener('click', function(event) {
             event.preventDefault();
-            navItems.forEach(link => link.classList.remove('active'));
-            event.target.classList.add('active');
-
+            setActiveFilter(navItems, event.target);
             currentSort = event.target.id === 'sort-by-date' ? 'date' : 'popularity';
             currentPage = 0;
             fetchTopStories(currentSort, currentTimePeriod, currentFilter);
@@ -68,12 +54,32 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Event listener for search input
-    searchInput.addEventListener('input', function() {
-        currentSearchText = this.value.trim().toLowerCase();
-        if (currentSearchText.length >= 2) {
-            currentPage = 0;
-            fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-        }
+    // searchInput.addEventListener('input', function() {
+    //     currentSearchText = this.value.trim().toLowerCase();
+    //     if (currentSearchText.length >= 2) {
+    //         currentPage = 0;
+    //         fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+    //     }else if(currentSearchText.length === 0){
+    //         fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+    //     }
+    // });
+
+    let searchTimeout;
+    searchInput.addEventListener('input', (event) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            currentSearchText = event.target.value.trim().toLowerCase();
+            if (currentSearchText.length >= 2) {
+                currentPage = 0; // Reset to the first page
+                searched = true;
+                fetchTopStories(currentSort, currentTimePeriod, currentFilter); // Call fetchTopStories to reapply the search
+            }else if(currentSearchText <1){
+                currentPage = 0;
+                document.querySelector('.list-all').innerHTML = ''
+                searched = false;
+                fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+            }
+        }, 1500); // 0.5 seconds debounce
     });
 
     //Event listener for selecting an option in search
@@ -111,19 +117,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchTopStories(sortBy, timePeriod, filterType) {
         const startTime = performance.now()
-        let apiUrl = 'https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty';
-
-        if (filterType === 'hot') {
-            apiUrl = 'https://hacker-news.firebaseio.com/v0/newstories.json?print=pretty';
-        } else if (filterType === 'show-hn') {
-            apiUrl = 'https://hacker-news.firebaseio.com/v0/showstories.json?print=pretty';
-        } else if (filterType === 'ask-hn') {
-            apiUrl = 'https://hacker-news.firebaseio.com/v0/askstories.json?print=pretty';
-        } else if (filterType === 'poll') {
-            apiUrl = 'https://hacker-news.firebaseio.com/v0/pollstories.json?print=pretty';
-        } else if (filterType === 'job') {
-            apiUrl = 'https://hacker-news.firebaseio.com/v0/jobstories.json?print=pretty';
-        }
+        const apiUrl = getApiUrl(filterType);
 
         try {
             const response = await fetch(apiUrl);
@@ -138,9 +132,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (storyIds.length === 0) {
                 renderNoStoriesMessage();
             } else {
-                currentPage = 0;
-                const paginatedStoryIds = storyIds.slice(0, storiesPerPage);
-                loadStories(paginatedStoryIds, sortBy, timePeriod);
+                if(!searched){
+                    let paginatedStoryIds = storyIds.slice(0, storiesPerPage);
+                    loadStories(paginatedStoryIds, sortBy, timePeriod);
+
+                }else{
+                    let paginatedStoryIds = storyIds;
+                    loadStories(paginatedStoryIds, sortBy, timePeriod);
+                }
+
+
             }
             const endTime = performance.now(); // End timing
             const duration = ((endTime - startTime) / 1000).toFixed(4)
@@ -149,6 +150,16 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error fetching stories:', error);
             renderNoStoriesMessage();
 
+        }
+    }
+    function getApiUrl(filterType) {
+        switch (filterType) {
+            case 'hot': return 'https://hacker-news.firebaseio.com/v0/newstories.json?print=pretty';
+            case 'show-hn': return 'https://hacker-news.firebaseio.com/v0/showstories.json?print=pretty';
+            case 'ask-hn': return 'https://hacker-news.firebaseio.com/v0/askstories.json?print=pretty';
+            case 'poll': return 'https://hacker-news.firebaseio.com/v0/pollstories.json?print=pretty';
+            case 'job': return 'https://hacker-news.firebaseio.com/v0/jobstories.json?print=pretty';
+            default: return 'https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty';
         }
     }
 
@@ -279,7 +290,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             button.textContent = `Hide Replies (${commentData.kids.length})`;
         } else {
-            // Ako veke se prikazani odgovorite, gi skriva
             repliesContainer.innerHTML = '';
             const commentData = await getCommentDetails(commentId);
             button.textContent = `Show Replies (${commentData.kids.length})`;
@@ -316,6 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span><img src="photos/user.png" style="width: 15px; vertical-align: middle; margin-right: 5px;">${storyData.by}</span> |
                         <span><img src="photos/clock.png" style="width: 15px; vertical-align: middle; margin-right: 5px;">${timeAgo}</span> |
                         <a class="story-url" target="_blank" href="${storyData.url}"><span>${storyData.url ? new URL(storyData.url).hostname : ''}</span></a>
+                        <span>${storyData.id}</span>
                     </div>
                 </div>
                 <div class="ms-auto d-flex align-items-center">
@@ -442,17 +453,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const pointsSpan = heart.querySelector('.points');
         const points = parseInt(pointsSpan.textContent, 10);
 
-        if (heart.classList.contains('active')) {
-            // Remove the heart and decrement the points
-            heart.classList.remove('active');
-            pointsSpan.textContent = points - 1;
+        heart.classList.toggle('active');
+        pointsSpan.textContent = heart.classList.contains('active') ? points + 1 : points - 1;
 
-        } else {
-            // Add the heart and increment the points
-            heart.classList.add('active');
-            pointsSpan.textContent = points + 1;
-
-        }
     }
 
     // Function to get selected time period from radio buttons
@@ -490,5 +493,20 @@ document.addEventListener('DOMContentLoaded', function() {
         listAll.innerHTML = `<p class="text-center mt-3">No ${currentFilter}s  available.</p>`;
     }
 
-    //onClickStars();
+    function setActiveFilter(navElements, activeElement) {
+        navElements.forEach(div => div.classList.remove('active'));
+        activeElement.classList.add('active');
+    }
+
+    function updateCategorySelect(filterType) {
+        if (filterType === 'all' || filterType === 'starred') {
+            categorySelect.disabled = false;
+            categorySelect.classList.remove('disabled-option');
+            categorySelect.value = 'all';
+        } else {
+            categorySelect.disabled = true;
+            categorySelect.classList.add('disabled-option');
+            categorySelect.value = 'all';
+        }
+    }
 });
