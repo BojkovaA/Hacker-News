@@ -17,76 +17,98 @@ document.addEventListener('DOMContentLoaded', function() {
     let favoriteStories = JSON.parse(localStorage.getItem('favoriteStories')) || [];
 
 
+    let stopFetching = false;
+    let currentFetchTask = null;
+
     // Initial fetch of stories sorted by date
     fetchTopStories(currentSort, currentTimePeriod, currentFilter);
 
 
     // Event listeners for navigation filters
     navDivs.forEach(div => {
-        div.addEventListener('click', function() {
+        div.addEventListener('click', async function() {
             const filterType = this.id;
             setActiveFilter(navDivs, this);
             currentFilter = filterType;
-            currentPage = 0; // Reset to the first page
-            fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+            currentPage = 0;
+            if(currentFetchTask) {
+                stopFetching = true;
+                await currentFetchTask
+            }
+            stopFetching = false;
+            currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
             updateCategorySelect(filterType);
         });
     });
 
     //event listener for date and popularity filter
     navItems.forEach(navLink => {
-        navLink.addEventListener('click', function(event) {
+        navLink.addEventListener('click', async function(event) {
             event.preventDefault();
             setActiveFilter(navItems, event.target);
             currentSort = event.target.id === 'sort-by-date' ? 'date' : 'popularity';
             currentPage = 0;
-            fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+            if (currentFetchTask) {
+                stopFetching = true;
+                await currentFetchTask;
+            }
+            stopFetching = false;
+            currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
         });
     });
 
     // Event listener for time period radio buttons
     document.querySelectorAll('input[name="time-period"]').forEach(radio => {
-        radio.addEventListener('change', function() {
+        radio.addEventListener('change', async function() {
             currentTimePeriod = getSelectedTimePeriod();
             currentPage = 0;
-            fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+            if (currentFetchTask) {
+                stopFetching = true;
+                await currentFetchTask;
+            }
+            stopFetching = false;
+            currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
         });
     });
-
-    // Event listener for search input
-    // searchInput.addEventListener('input', function() {
-    //     currentSearchText = this.value.trim().toLowerCase();
-    //     if (currentSearchText.length >= 2) {
-    //         currentPage = 0;
-    //         fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-    //     }else if(currentSearchText.length === 0){
-    //         fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-    //     }
-    // });
 
     let searchTimeout;
     searchInput.addEventListener('input', (event) => {
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
+        searchTimeout = setTimeout(async () => {
             currentSearchText = event.target.value.trim().toLowerCase();
             if (currentSearchText.length >= 2) {
                 currentPage = 0; // Reset to the first page
                 searched = true;
-                fetchTopStories(currentSort, currentTimePeriod, currentFilter); // Call fetchTopStories to reapply the search
+                if (currentFetchTask) {
+                    stopFetching = true;
+                    await currentFetchTask;
+                }
+                stopFetching = false;
+                currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter); // Call fetchTopStories to reapply the search
             }else if(currentSearchText <1){
                 currentPage = 0;
+                if (currentFetchTask) {
+                    stopFetching = true;
+                    await currentFetchTask;
+                }
+                stopFetching = false;
                 document.querySelector('.list-all').innerHTML = ''
                 searched = false;
-                fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+                currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
             }
-        }, 1500); // 0.5 seconds debounce
+        }, 1500);
     });
 
     //Event listener for selecting an option in search
-    categorySelect.addEventListener('change', function() {
+    categorySelect.addEventListener('change', async function() {
         currentFilter = this.value;
-        currentPage = 0; // Reset to the first page
-        fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+        currentPage = 0;
+        if (currentFetchTask) {
+            stopFetching = true;
+            await currentFetchTask;
+        }
+        stopFetching = false;
+        currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
     });
 
     // Scroll event listener for pagination
@@ -134,11 +156,11 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 if(!searched){
                     let paginatedStoryIds = storyIds.slice(0, storiesPerPage);
-                    loadStories(paginatedStoryIds, sortBy, timePeriod);
+                    await loadStories(paginatedStoryIds, sortBy, timePeriod);
 
                 }else{
                     let paginatedStoryIds = storyIds;
-                    loadStories(paginatedStoryIds, sortBy, timePeriod);
+                    await loadStories(paginatedStoryIds, sortBy, timePeriod);
                 }
 
 
@@ -172,6 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         for (let storyId of storyIds) {
+            if (stopFetching) break;
             const storyData = await getStoryDetails(storyId);
 
             // Filter and sort the single story before rendering
