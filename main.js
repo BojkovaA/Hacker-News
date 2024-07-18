@@ -1,3 +1,4 @@
+const api = `https://hacker-news.firebaseio.com/v0`
 document.addEventListener('DOMContentLoaded', function() {
     const navDivs = document.querySelectorAll('.custom-list .custom-list-div');
     const navItems = document.querySelectorAll('.nav-item .nav-link');
@@ -14,119 +15,137 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentSearchText = '';
     let searched=false;
     let isLoading = false;
-    let favoriteStories = JSON.parse(localStorage.getItem('favoriteStories')) || [];
+    let favoriteStories = JSON.parse(localStorage.getItem('favoriteStories')).reverse() || [];
 
 
     let stopFetching = false;
     let currentFetchTask = null;
 
+    console.log(favoriteStories)
     // Initial fetch of stories sorted by date
-    fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+    fetchStories(fetchTopStories,currentSort, currentTimePeriod, currentFilter);
 
 
-    // Event listeners for navigation filters
-    navDivs.forEach(div => {
-        div.addEventListener('click', async function() {
-            const filterType = this.id;
-            setActiveFilter(navDivs, this);
-            currentFilter = filterType;
-            currentPage = 0;
-            if(currentFetchTask) {
-                stopFetching = true;
-                await currentFetchTask
-            }
-            stopFetching = false;
-            currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-            updateCategorySelect(filterType);
-        });
-    });
 
-    //event listener for date and popularity filter
-    navItems.forEach(navLink => {
-        navLink.addEventListener('click', async function(event) {
-            event.preventDefault();
-            setActiveFilter(navItems, event.target);
-            currentSort = event.target.id === 'sort-by-date' ? 'date' : 'popularity';
-            currentPage = 0;
-            if (currentFetchTask) {
-                stopFetching = true;
-                await currentFetchTask;
-            }
-            stopFetching = false;
-            currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-        });
-    });
-
-    // Event listener for time period radio buttons
-    document.querySelectorAll('input[name="time-period"]').forEach(radio => {
-        radio.addEventListener('change', async function() {
-            currentTimePeriod = getSelectedTimePeriod();
-            currentPage = 0;
-            if (currentFetchTask) {
-                stopFetching = true;
-                await currentFetchTask;
-            }
-            stopFetching = false;
-            currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-        });
-    });
-
-    let searchTimeout;
-    searchInput.addEventListener('input', (event) => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(async () => {
-            currentSearchText = event.target.value.trim().toLowerCase();
-            if (currentSearchText.length >= 2) {
-                currentPage = 0; // Reset to the first page
-                searched = true;
-                if (currentFetchTask) {
-                    stopFetching = true;
-                    await currentFetchTask;
-                }
-                stopFetching = false;
-                currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter); // Call fetchTopStories to reapply the search
-            }else if(currentSearchText <1){
-                currentPage = 0;
-                if (currentFetchTask) {
-                    stopFetching = true;
-                    await currentFetchTask;
-                }
-                stopFetching = false;
-                document.querySelector('.list-all').innerHTML = ''
-                searched = false;
-                currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
-            }
-        }, 1500);
-    });
-
-    //Event listener for selecting an option in search
-    categorySelect.addEventListener('change', async function() {
-        currentFilter = this.value;
-        currentPage = 0;
+    async function fetchStories() {
         if (currentFetchTask) {
             stopFetching = true;
             await currentFetchTask;
         }
         stopFetching = false;
         currentFetchTask = fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+    }
+
+    //Function to handle side navbar filter
+    async function handleNavClick(filterType) {
+        setActiveFilter(navDivs, document.getElementById(filterType));
+        currentFilter = filterType;
+        currentPage = 0;
+        await fetchStories();
+        updateCategorySelect(filterType);
+    }
+
+    // Event listeners for navigation filters
+    navDivs.forEach(div => {
+        div.addEventListener('click', function() {
+            handleNavClick(this.id);
+        });
     });
 
-    // Scroll event listener for pagination
-    window.addEventListener('scroll', () => {
+
+
+    //Function to handle time and period filter
+    async function handleNavItems(event){
+        event.preventDefault();
+        setActiveFilter(navItems, event.target);
+        currentSort = event.target.id === 'sort-by-date' ? 'date' : 'popularity';
+        currentPage = 0;
+        await fetchStories();
+    };
+
+    //Event listener for date and popularity filter
+    navItems.forEach(navLink => {
+        navLink.addEventListener('click', function(event){
+            handleNavItems(event)
+        });
+    });
+
+
+
+    // Function to handle time period change
+    async function handleTimePeriodChange() {
+        currentTimePeriod = getSelectedTimePeriod();
+        currentPage = 0;
+        await fetchStories();
+    }
+
+    // Event listener for time period radio buttons
+    document.querySelectorAll('input[name="time-period"]').forEach(radio => {
+        radio.addEventListener('change', handleTimePeriodChange);
+    });
+
+
+
+    let searchTimeout;
+    // Function to handle search input
+    async function handleSearchInput(event) {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(async () => {
+            currentSearchText = event.target.value.trim().toLowerCase();
+
+            if (currentSearchText.length >= 2) {
+                currentPage = 0; // Reset to the first page
+                searched = true;
+                await fetchStories();
+            } else if (currentSearchText.length < 1) {
+                currentPage = 0;
+                document.querySelector('.list-all').innerHTML = '';
+                searched = false;
+                await fetchStories();
+            }
+        }, 1500);
+    }
+
+    // Event listener for the search input
+    searchInput.addEventListener('input', handleSearchInput);
+
+
+
+    //Function to handle category selection
+    async function handleCategorySelect(){
+        currentFilter = this.value;
+        currentPage = 0;
+        await fetchStories();
+    }
+
+    //Event listener for selecting an option in search
+    categorySelect.addEventListener('change',  handleCategorySelect);
+
+
+
+    // Function to handle scroll for pagination
+    function handleScrollForPagination() {
         if ((window.innerHeight + window.scrollY) / document.querySelector('.list-all').scrollHeight >= 0.6 && !isLoading) {
             currentPage++;
             const start = currentPage * storiesPerPage;
             const end = start + storiesPerPage;
-            const paginatedStoryIds = storyIds.slice(start, end);
+            let paginatedStoryIds = storyIds.slice(start, end);
+            //paginatedStoryIds = paginatedStoryIds.filter(id => !storyIds.includes(id));
             loadStories(paginatedStoryIds, currentSort, currentTimePeriod);
         }
-    });
+    }
+
+    // Scroll event listener for pagination
+    window.addEventListener('scroll', handleScrollForPagination);
+
+
+
 
     // Function to fetch story details by ID
     async function getStoryDetails(storyId) {
         try {
             let time1 = performance.now();
-            const response = await fetch(`https://hacker-news.firebaseio.com/v0/item/${storyId}.json?print=pretty`);
+            const response = await fetch(`${api}/item/${storyId}.json?print=pretty`);
             let time2 = performance.now();
             return await response.json();
         } catch (error) {
@@ -136,7 +155,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     // Function to fetch top stories based on sort, time period, and filter
-
     async function fetchTopStories(sortBy, timePeriod, filterType) {
         const startTime = performance.now()
         const apiUrl = getApiUrl(filterType);
@@ -174,16 +192,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
         }
     }
+
+
     function getApiUrl(filterType) {
         switch (filterType) {
-            case 'hot': return 'https://hacker-news.firebaseio.com/v0/newstories.json?print=pretty';
-            case 'show-hn': return 'https://hacker-news.firebaseio.com/v0/showstories.json?print=pretty';
-            case 'ask-hn': return 'https://hacker-news.firebaseio.com/v0/askstories.json?print=pretty';
-            case 'poll': return 'https://hacker-news.firebaseio.com/v0/pollstories.json?print=pretty';
-            case 'job': return 'https://hacker-news.firebaseio.com/v0/jobstories.json?print=pretty';
-            default: return 'https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty';
+            case 'hot': return `${api}/newstories.json?print=pretty`;
+            case 'show-hn': return `${api}/showstories.json?print=pretty`;
+            case 'ask-hn': return `${api}/askstories.json?print=pretty`;
+            case 'poll': return `${api}/pollstories.json?print=pretty`;
+            case 'job': return `${api}/jobstories.json?print=pretty`;
+            default: return `${api}/topstories.json?print=pretty`;
         }
     }
+
+
 
     // Function to load and render stories based on IDs, sort, and time period
     async function loadStories(storyIds, sortBy, timePeriod) {
@@ -211,41 +233,46 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
-    // Function to filter and sort stories based on search text, sort criteria, and time period
-    function filterAndSortStories(stories, sortBy, timePeriod) {
+    // Function to check if a story matches the search criteria
+    function matchesSearch(storyData, searchText) {
+        try {
+            const titleMatches = storyData.title && storyData.title.toLowerCase().includes(searchText);
+            const authorMatches = storyData.by && storyData.by.toLowerCase().includes(searchText);
+            const urlMatches = storyData.url && storyData.url.toLowerCase().includes(searchText);
+
+            return titleMatches || authorMatches || urlMatches;
+        } catch (error) {
+            console.error('Error in matchesSearch:', error);
+            return false; // Return false if any error occurs
+        }
+    }
+
+
+    // Function to check if a story falls within the selected time period
+    function matchesTimePeriod(storyData, timePeriod) {
         const now = new Date();
-        const filteredStories = stories.filter(storyData => {
-            const storyDate = new Date(storyData.time * 1000);
-            const timeDiff = now - storyDate;
+        const storyDate = new Date(storyData.time * 1000);
+        const timeDiff = now - storyDate;
 
-            // Check if search text matches title
-            const titleMatches = storyData.title.toLowerCase().includes(currentSearchText);
-            const authorMatches = storyData.by.toLowerCase().includes(currentSearchText);
-            const urlMatches = storyData.url ? storyData.url.toLowerCase().includes(currentSearchText) : false;
+        switch (timePeriod) {
+            case 'last-24h':
+                return timeDiff < 24 * 60 * 60 * 1000;
+            case 'past-week':
+                return timeDiff < 7 * 24 * 60 * 60 * 1000;
+            case 'past-month':
+                return timeDiff < 30 * 24 * 60 * 60 * 1000;
+            case 'forever':
+                return true;
+            default:
+                return false;
+        }
+    }
 
-            const searchMatches = titleMatches || authorMatches || urlMatches;
-
-
-            // Filter by time period
-            let timePeriodMatches = true;
-            switch (timePeriod) {
-                case 'last-24h':
-                    timePeriodMatches = timeDiff < 24 * 60 * 60 * 1000;
-                    break;
-                case 'past-week':
-                    timePeriodMatches = timeDiff < 7 * 24 * 60 * 60 * 1000;
-                    break;
-                case 'past-month':
-                    timePeriodMatches = timeDiff < 30 * 24 * 60 * 60 * 1000;
-                    break;
-                case 'forever':
-                    timePeriodMatches = true;
-                    break;
-            }
-
-            // Return true if any match found
-            return searchMatches && timePeriodMatches;
-        });
+    // Main filter and sort function
+    function filterAndSortStories(stories, sortBy, timePeriod) {
+        const filteredStories = stories.filter(storyData =>
+            matchesSearch(storyData, currentSearchText) && matchesTimePeriod(storyData, timePeriod)
+        );
 
         // Sort stories by date or popularity
         if (sortBy === 'date') {
@@ -257,15 +284,16 @@ document.addEventListener('DOMContentLoaded', function() {
         return filteredStories;
     }
 
-
+    //Function to get comment details
     async function getCommentDetails(commentId) {
         try {
-            const response = await fetch(`https://hacker-news.firebaseio.com/v0/item/${commentId}.json?print=pretty`);
+            const response = await fetch(`${api}/item/${commentId}.json?print=pretty`);
             return await response.json();
         } catch (error) {
             console.error(`Error fetching comment ${commentId}:`, error);
         }
     }
+
 
     // Function to render a comment and its replies
     function renderComment(commentData, depth = 0) {
@@ -288,6 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return commentHtml;
     }
 
+
     // Function to load and render comments recursively
     async function loadComments(commentIds, container, depth = 0) {
         for (let commentId of commentIds) {
@@ -297,6 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         addRepliesEventListeners();
     }
+
 
     // Function to handle the show replies button click
     async function handleRepliesClick(event) {
@@ -463,6 +493,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         this.classList.toggle('checked', !isFavorite);
         localStorage.setItem('favoriteStories', JSON.stringify(favoriteStories));
+
+        if (currentFilter === 'starred') {
+            fetchTopStories(currentSort, currentTimePeriod, currentFilter);
+        }
     }
 
     function addHeartEventListeners() {
