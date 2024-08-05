@@ -1,12 +1,9 @@
 const HackerNewsModule = () => {
     const returnObj = {}
     const api = `https://hacker-news.firebaseio.com/v0`;
-    returnObj.init = () =>{
-        const navDivs = document.querySelectorAll('.custom-list .custom-list-div');
-        const navItems = document.querySelectorAll('.nav-item .nav-link');
-        const searchInput = document.getElementById('searchInput');
-        const categorySelect = document.getElementById('categorySelect');
-        const resultsCount = document.querySelector('.results p');
+    returnObj.init = (elements) =>{
+
+        const { navDivs, navItems, searchInput, categorySelect, resultsCount } = elements;
 
         let storyIds = [];
         let currentPage = 0;
@@ -48,11 +45,13 @@ const HackerNewsModule = () => {
         }
 
         // Event listeners for navigation filters
-        navDivs.forEach(div => {
-            div.addEventListener('click', function() {
-                handleNavClick(this.id);
+        if(navDivs){
+            navDivs.forEach(div => {
+                div.addEventListener('click', function() {
+                    handleNavClick(this.id);
+                });
             });
-        });
+        }
 
 
 
@@ -66,11 +65,13 @@ const HackerNewsModule = () => {
         };
 
         //Event listener for date and popularity filter
-        navItems.forEach(navLink => {
-            navLink.addEventListener('click', function(event){
-                handleNavItems(event)
+        if (navItems) {
+            navItems.forEach(navLink => {
+                navLink.addEventListener('click', function(event){
+                    handleNavItems(event);
+                });
             });
-        });
+        }
 
 
 
@@ -109,8 +110,9 @@ const HackerNewsModule = () => {
         }
 
         // Event listener for the search input
-        searchInput.addEventListener('input', handleSearchInput);
-
+        if(searchInput){
+            searchInput.addEventListener('input', handleSearchInput);
+        }
 
 
         //Function to handle category selection
@@ -121,8 +123,9 @@ const HackerNewsModule = () => {
         }
 
         //Event listener for selecting an option in search
-        categorySelect.addEventListener('change',  handleCategorySelect);
-
+        if(categorySelect){
+            categorySelect.addEventListener('change',  handleCategorySelect);
+        }
 
 
         // Function to handle scroll for pagination
@@ -177,8 +180,9 @@ const HackerNewsModule = () => {
 
 
                 const duration = endPerformanceTiming(startTime);
-                resultsCount.textContent = `${storyIds.length} results (${duration} seconds)`;
-            } catch (error) {
+                if(resultsCount){
+                    resultsCount.textContent = `${storyIds.length} results (${duration} seconds)`;
+                }            } catch (error) {
                 handleFetchError(error);
                 renderNoStoriesMessage();
 
@@ -556,7 +560,9 @@ const HackerNewsModule = () => {
 
         function renderNoStoriesMessage() {
             const listAll = document.querySelector('.list-all');
-            resultsCount.textContent = `0 results (0 seconds)`;
+            if(resultsCount){
+                resultsCount.textContent = `0 results (0 seconds)`;
+            }
             listAll.innerHTML = `<p class="text-center mt-3">No ${currentFilter}s  available.</p>`;
         }
 
